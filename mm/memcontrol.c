@@ -900,13 +900,6 @@ unsigned long mem_cgroup_read_events(struct mem_cgroup *memcg,
 }
 EXPORT_SYMBOL(mem_cgroup_read_events);
 
-static void mem_cgroup_swap_statistics(struct mem_cgroup *memcg,
-					 bool charge)
-{
-	int val = (charge) ? 1 : -1;
-	this_cpu_add(memcg->stat->count[MEM_CGROUP_STAT_SWAP], val);
-}
-
 static void mem_cgroup_charge_statistics(struct mem_cgroup *memcg,
 					 struct page *page,
 					 int nr_pages)
