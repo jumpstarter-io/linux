@@ -87,8 +87,7 @@ static int really_do_swap_account __initdata;
 #define do_swap_account		0
 #endif
 
-
-static const char * const mem_cgroup_stat_names[] = {
+const char * const mem_cgroup_stat_names[] = {
 	"cache",
 	"rss",
 	"rss_huge",
@@ -96,29 +95,24 @@ static const char * const mem_cgroup_stat_names[] = {
 	"writeback",
 	"swap",
 };
+EXPORT_SYMBOL(mem_cgroup_stat_names);
 
-enum mem_cgroup_events_index {
-	MEM_CGROUP_EVENTS_PGPGIN,	/* # of pages paged in */
-	MEM_CGROUP_EVENTS_PGPGOUT,	/* # of pages paged out */
-	MEM_CGROUP_EVENTS_PGFAULT,	/* # of page-faults */
-	MEM_CGROUP_EVENTS_PGMAJFAULT,	/* # of major page-faults */
-	MEM_CGROUP_EVENTS_NSTATS,
-};
-
-static const char * const mem_cgroup_events_names[] = {
+const char * const mem_cgroup_events_names[] = {
 	"pgpgin",
 	"pgpgout",
 	"pgfault",
 	"pgmajfault",
 };
+EXPORT_SYMBOL(mem_cgroup_events_names);
 
-static const char * const mem_cgroup_lru_names[] = {
+const char * const mem_cgroup_lru_names[] = {
 	"inactive_anon",
 	"active_anon",
 	"inactive_file",
 	"active_file",
 	"unevictable",
 };
+EXPORT_SYMBOL(mem_cgroup_lru_names);
 
 /*
  * Per memcg event counter is incremented at every pagein/pageout. With THP,
@@ -505,10 +499,16 @@ struct cgroup_subsys_state *vmpressure_to_css(struct vmpressure *vmpr)
 	return &container_of(vmpr, struct mem_cgroup, vmpressure)->css;
 }
 
-static inline bool mem_cgroup_is_root(struct mem_cgroup *memcg)
+static inline bool __mem_cgroup_is_root(struct mem_cgroup *memcg)
 {
 	return (memcg == root_mem_cgroup);
 }
+
+bool mem_cgroup_is_root(struct mem_cgroup *memcg)
+{
+	return __mem_cgroup_is_root(memcg);
+}
+EXPORT_SYMBOL(mem_cgroup_is_root);
 
 /*
  * We restrict the id in the range of [1, 65535], so it can fit into
@@ -549,7 +549,7 @@ void sock_update_memcg(struct sock *sk)
 		 * decision in this case.
 		 */
 		if (sk->sk_cgrp) {
-			BUG_ON(mem_cgroup_is_root(sk->sk_cgrp->memcg));
+			BUG_ON(__mem_cgroup_is_root(sk->sk_cgrp->memcg));
 			css_get(&sk->sk_cgrp->memcg->css);
 			return;
 		}
@@ -557,7 +557,7 @@ void sock_update_memcg(struct sock *sk)
 		rcu_read_lock();
 		memcg = mem_cgroup_from_task(current);
 		cg_proto = sk->sk_prot->proto_cgroup(memcg);
-		if (!mem_cgroup_is_root(memcg) &&
+		if (!__mem_cgroup_is_root(memcg) &&
 		    memcg_proto_active(cg_proto) &&
 		    css_tryget_online(&memcg->css)) {
 			sk->sk_cgrp = cg_proto;
@@ -579,7 +579,7 @@ void sock_release_memcg(struct sock *sk)
 
 struct cg_proto *tcp_proto_cgroup(struct mem_cgroup *memcg)
 {
-	if (!memcg || mem_cgroup_is_root(memcg))
+	if (!memcg || __mem_cgroup_is_root(memcg))
 		return NULL;
 
 	return &memcg->tcp_mem;
@@ -862,8 +862,8 @@ mem_cgroup_largest_soft_limit_node(struct mem_cgroup_tree_per_zone *mctz)
  * common workload, threashold and synchonization as vmstat[] should be
  * implemented.
  */
-static long mem_cgroup_read_stat(struct mem_cgroup *memcg,
-				 enum mem_cgroup_stat_index idx)
+long mem_cgroup_read_stat(struct mem_cgroup *memcg,
+			  enum mem_cgroup_stat_index idx)
 {
 	long val = 0;
 	int cpu;
@@ -879,8 +879,9 @@ static long mem_cgroup_read_stat(struct mem_cgroup *memcg,
 	put_online_cpus();
 	return val;
 }
+EXPORT_SYMBOL(mem_cgroup_read_stat);
 
-static unsigned long mem_cgroup_read_events(struct mem_cgroup *memcg,
+unsigned long mem_cgroup_read_events(struct mem_cgroup *memcg,
 					    enum mem_cgroup_events_index idx)
 {
 	unsigned long val = 0;
@@ -896,6 +897,14 @@ static unsigned long mem_cgroup_read_events(struct mem_cgroup *memcg,
 #endif
 	put_online_cpus();
 	return val;
+}
+EXPORT_SYMBOL(mem_cgroup_read_events);
+
+static void mem_cgroup_swap_statistics(struct mem_cgroup *memcg,
+					 bool charge)
+{
+	int val = (charge) ? 1 : -1;
+	this_cpu_add(memcg->stat->count[MEM_CGROUP_STAT_SWAP], val);
 }
 
 static void mem_cgroup_charge_statistics(struct mem_cgroup *memcg,
@@ -959,7 +968,7 @@ static unsigned long mem_cgroup_node_nr_lru_pages(struct mem_cgroup *memcg,
 	return nr;
 }
 
-static unsigned long mem_cgroup_nr_lru_pages(struct mem_cgroup *memcg,
+unsigned long mem_cgroup_nr_lru_pages(struct mem_cgroup *memcg,
 			unsigned int lru_mask)
 {
 	unsigned long nr = 0;
@@ -969,6 +978,7 @@ static unsigned long mem_cgroup_nr_lru_pages(struct mem_cgroup *memcg,
 		nr += mem_cgroup_node_nr_lru_pages(memcg, nid, lru_mask);
 	return nr;
 }
+EXPORT_SYMBOL(mem_cgroup_nr_lru_pages);
 
 static bool mem_cgroup_event_ratelimit(struct mem_cgroup *memcg,
 				       enum mem_cgroup_events_target target)
@@ -1038,6 +1048,7 @@ struct mem_cgroup *mem_cgroup_from_task(struct task_struct *p)
 
 	return mem_cgroup_from_css(task_css(p, memory_cgrp_id));
 }
+EXPORT_SYMBOL(mem_cgroup_from_task);
 
 static struct mem_cgroup *get_mem_cgroup_from_mm(struct mm_struct *mm)
 {
@@ -1695,7 +1706,7 @@ static int mem_cgroup_count_children(struct mem_cgroup *memcg)
 /*
  * Return the memory (and swap, if configured) limit for a memcg.
  */
-static u64 mem_cgroup_get_limit(struct mem_cgroup *memcg)
+u64 mem_cgroup_get_limit(struct mem_cgroup *memcg, bool swap)
 {
 	u64 limit;
 
@@ -1704,7 +1715,7 @@ static u64 mem_cgroup_get_limit(struct mem_cgroup *memcg)
 	/*
 	 * Do not consider swap space if we cannot swap due to swappiness
 	 */
-	if (mem_cgroup_swappiness(memcg)) {
+	if (swap && mem_cgroup_swappiness(memcg)) {
 		u64 memsw;
 
 		limit += total_swap_pages << PAGE_SHIFT;
@@ -1719,6 +1730,7 @@ static u64 mem_cgroup_get_limit(struct mem_cgroup *memcg)
 
 	return limit;
 }
+EXPORT_SYMBOL(mem_cgroup_get_limit);
 
 static void mem_cgroup_out_of_memory(struct mem_cgroup *memcg, gfp_t gfp_mask,
 				     int order)
@@ -1740,7 +1752,7 @@ static void mem_cgroup_out_of_memory(struct mem_cgroup *memcg, gfp_t gfp_mask,
 	}
 
 	check_panic_on_oom(CONSTRAINT_MEMCG, gfp_mask, order, NULL);
-	totalpages = mem_cgroup_get_limit(memcg) >> PAGE_SHIFT ? : 1;
+	totalpages = mem_cgroup_get_limit(memcg, true) >> PAGE_SHIFT ? : 1;
 	for_each_mem_cgroup_tree(iter, memcg) {
 		struct css_task_iter it;
 		struct task_struct *task;
@@ -2513,7 +2525,7 @@ static int try_charge(struct mem_cgroup *memcg, gfp_t gfp_mask,
 	bool drained = false;
 	int ret = 0;
 
-	if (mem_cgroup_is_root(memcg))
+	if (__mem_cgroup_is_root(memcg))
 		goto done;
 retry:
 	if (consume_stock(memcg, nr_pages))
@@ -2613,7 +2625,7 @@ static void cancel_charge(struct mem_cgroup *memcg, unsigned int nr_pages)
 {
 	unsigned long bytes = nr_pages * PAGE_SIZE;
 
-	if (mem_cgroup_is_root(memcg))
+	if (__mem_cgroup_is_root(memcg))
 		return;
 
 	res_counter_uncharge(&memcg->res, bytes);
@@ -2630,7 +2642,7 @@ static void __mem_cgroup_cancel_local_charge(struct mem_cgroup *memcg,
 {
 	unsigned long bytes = nr_pages * PAGE_SIZE;
 
-	if (mem_cgroup_is_root(memcg))
+	if (__mem_cgroup_is_root(memcg))
 		return;
 
 	res_counter_uncharge_until(&memcg->res, memcg->res.parent, bytes);
@@ -3270,7 +3282,7 @@ void __memcg_kmem_commit_charge(struct page *page, struct mem_cgroup *memcg,
 {
 	struct page_cgroup *pc;
 
-	VM_BUG_ON(mem_cgroup_is_root(memcg));
+	VM_BUG_ON(__mem_cgroup_is_root(memcg));
 
 	/* The page allocation failed. Revert */
 	if (!page) {
@@ -3306,7 +3318,7 @@ void __memcg_kmem_uncharge_pages(struct page *page, int order)
 	if (!memcg)
 		return;
 
-	VM_BUG_ON_PAGE(mem_cgroup_is_root(memcg), page);
+	VM_BUG_ON_PAGE(__mem_cgroup_is_root(memcg), page);
 	memcg_uncharge_kmem(memcg, PAGE_SIZE << order);
 }
 #else
@@ -3461,7 +3473,7 @@ static int mem_cgroup_move_parent(struct page *page,
 	unsigned long uninitialized_var(flags);
 	int ret;
 
-	VM_BUG_ON(mem_cgroup_is_root(child));
+	VM_BUG_ON(__mem_cgroup_is_root(child));
 
 	ret = -EBUSY;
 	if (!get_page_unless_zero(page))
@@ -3955,7 +3967,7 @@ static ssize_t mem_cgroup_force_empty_write(struct kernfs_open_file *of,
 {
 	struct mem_cgroup *memcg = mem_cgroup_from_css(of_css(of));
 
-	if (mem_cgroup_is_root(memcg))
+	if (__mem_cgroup_is_root(memcg))
 		return -EINVAL;
 	return mem_cgroup_force_empty(memcg) ?: nbytes;
 }
@@ -4016,11 +4028,11 @@ static unsigned long mem_cgroup_recursive_stat(struct mem_cgroup *memcg,
 	return val;
 }
 
-static inline u64 mem_cgroup_usage(struct mem_cgroup *memcg, bool swap)
+u64 mem_cgroup_usage(struct mem_cgroup *memcg, bool swap)
 {
 	u64 val;
 
-	if (!mem_cgroup_is_root(memcg)) {
+	if (!__mem_cgroup_is_root(memcg)) {
 		if (!swap)
 			return res_counter_read_u64(&memcg->res, RES_USAGE);
 		else
@@ -4039,6 +4051,7 @@ static inline u64 mem_cgroup_usage(struct mem_cgroup *memcg, bool swap)
 
 	return val << PAGE_SHIFT;
 }
+EXPORT_SYMBOL(mem_cgroup_usage);
 
 
 static u64 mem_cgroup_read_u64(struct cgroup_subsys_state *css,
@@ -4198,7 +4211,7 @@ static ssize_t mem_cgroup_write(struct kernfs_open_file *of,
 
 	switch (name) {
 	case RES_LIMIT:
-		if (mem_cgroup_is_root(memcg)) { /* Can't set limit on root */
+		if (__mem_cgroup_is_root(memcg)) { /* Can't set limit on root */
 			ret = -EINVAL;
 			break;
 		}
@@ -5915,7 +5928,7 @@ static void __mem_cgroup_clear_mc(void)
 	/* we must fixup refcnts and charges */
 	if (mc.moved_swap) {
 		/* uncharge swap account from the old cgroup */
-		if (!mem_cgroup_is_root(mc.from))
+		if (!__mem_cgroup_is_root(mc.from))
 			res_counter_uncharge(&mc.from->memsw,
 					     PAGE_SIZE * mc.moved_swap);
 
@@ -5926,7 +5939,7 @@ static void __mem_cgroup_clear_mc(void)
 		 * we charged both to->res and to->memsw, so we should
 		 * uncharge to->res.
 		 */
-		if (!mem_cgroup_is_root(mc.to))
+		if (!__mem_cgroup_is_root(mc.to))
 			res_counter_uncharge(&mc.to->res,
 					     PAGE_SIZE * mc.moved_swap);
 		/* we've already done css_get(mc.to) */
@@ -6293,7 +6306,7 @@ void mem_cgroup_uncharge_swap(swp_entry_t entry)
 	rcu_read_lock();
 	memcg = mem_cgroup_lookup(id);
 	if (memcg) {
-		if (!mem_cgroup_is_root(memcg))
+		if (!__mem_cgroup_is_root(memcg))
 			res_counter_uncharge(&memcg->memsw, PAGE_SIZE);
 		mem_cgroup_swap_statistics(memcg, false);
 		css_put(&memcg->css);
@@ -6458,7 +6471,7 @@ static void uncharge_batch(struct mem_cgroup *memcg, unsigned long pgpgout,
 {
 	unsigned long flags;
 
-	if (!mem_cgroup_is_root(memcg)) {
+	if (!__mem_cgroup_is_root(memcg)) {
 		if (nr_mem)
 			res_counter_uncharge(&memcg->res,
 					     nr_mem * PAGE_SIZE);
